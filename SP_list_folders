@@ -58,9 +58,13 @@ items_response = requests.get(items_url, headers=headers)
 items_response.raise_for_status()
 items = items_response.json()["value"]
 
-print("📂 Seznam složek a souborů v root:")
+print("\n📂 Seznam složek a souborů:")
 for item in items:
-    if item["folder"] if "folder" in item else False:
-        print(f"📁 {item['name']} (složka)")
+    name = item["name"]
+    size = item.get("size", 0)
+    
+    if "folder" in item:
+        count = item["folder"].get("childCount", "neznámý počet")
+        print(f"📁 {name} — {count} položek")
     else:
-        print(f"📄 {item['name']} (soubor)")
+        print(f"📄 {name} — {round(size / 1024, 2)} KB")
