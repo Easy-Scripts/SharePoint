@@ -1,0 +1,73 @@
+import requests
+import json
+
+# ============ VSTUPNÍ ÚDAJE ============ #
+tenant_id = 'TVŮJ_TENANT_ID'
+client_id = 'TVŮJ_CLIENT_ID'
+client_secret = 'TVŮJ_CLIENT_SECRET'
+sharepoint_site_name = 'NAZEV_SITE'  # Např. 'mojefirma'
+sharepoint_doc_library = 'Documents'  # Např. 'Documents' nebo 'Sdílené dokumenty'
+relative_path = 'TestFolder/test.txt'  # Cesta na SharePoint
+local_file_path = 'test.txt'  # Lokální soubor k nahrání
+
+# ============ ZÍSKÁNÍ ACCESS TOKENU ============ #
+token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+token_headers = {
+    "Content-Type": "application/x-www-form-urlencoded"
+}
+token_data = {
+    "client_id": client_id,
+    "scope": "https://graph.microsoft.com/.default",
+    "client_secret": client_secret,
+    "grant_type": "client_credentials"
+}
+
+token_response = requests.post(token_url, headers=token_headers, data=token_data)
+token_response.raise_for_status()
+access_token = token_response.json()["access_token"]
+print("✅ Access token získán.")
+
+# ============ NALEZENÍ SITE ID ============ #
+site_search_url = f"https://graph.microsoft.com/v1.0/sites?search={sharepoint_site_name}"
+site_headers = {
+    "Authorization": f"Bearer {access_token}"
+}
+
+site_response = requests.get(site_search_url, headers=site_headers)
+site_response.raise_for_status()
+site_id = site_response.json()["value"][0]["id"]
+print(f"✅ Site ID nalezeno: {site_id}")
+
+# ============ NALEZENÍ DRIVE ID (KNIHOVNY) ============ #
+drive_list_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives"
+drive_response = requests.get(drive_list_url, headers=site_headers)
+drive_response.raise_for_status()
+drives = drive_response.json()["value"]
+
+drive_id = None
+for drive in drives:
+    if drive["name"] == sharepoint_doc_library:
+        drive_id = drive["id"]
+        break
+
+if not drive_id:
+    raise Exception("❌ Knihovna dokumentů nebyla nalezena.")
+
+print(f"✅ Drive ID nalezeno: {drive_id}")
+
+# ============ NAHRÁNÍ SOUBORU ============ #
+upload_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root:/{relative_path}:/content"
+
+with open(local_file_path, "rb") as file:
+    file_content = file.read()
+
+upload_headers = {
+    "Authorization": f"Bearer {access_token}",
+    "Content-Type": "application/octet-stream"
+}
+
+upload_response = requests.put(upload_url, headers=upload_headers, data=file_content)
+upload_response.raise_for_status()
+
+print("✅ Soubor úspěšně nahrán na SharePoint.")
+print(json.dumps(upload_response.json(), indent=2))
