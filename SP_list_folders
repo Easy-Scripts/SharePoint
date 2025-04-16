@@ -1,0 +1,66 @@
+import requests
+import json
+
+# ======= VSTUPY =======
+tenant_id = 'TVŮJ_TENANT_ID'
+client_id = 'TVŮJ_CLIENT_ID'
+client_secret = 'TVŮJ_CLIENT_SECRET'
+sharepoint_site_name = 'NAZEV_SITE'  # např. 'mojefirma'
+sharepoint_doc_library = 'Documents'  # nebo 'Sdílené dokumenty'
+
+# ======= ZÍSKÁNÍ ACCESS TOKENU =======
+token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+token_headers = {
+    "Content-Type": "application/x-www-form-urlencoded"
+}
+token_data = {
+    "client_id": client_id,
+    "scope": "https://graph.microsoft.com/.default",
+    "client_secret": client_secret,
+    "grant_type": "client_credentials"
+}
+
+token_response = requests.post(token_url, headers=token_headers, data=token_data)
+token_response.raise_for_status()
+access_token = token_response.json()["access_token"]
+print("✅ Access token získán.")
+
+# ======= NALEZENÍ SITE ID =======
+site_search_url = f"https://graph.microsoft.com/v1.0/sites?search={sharepoint_site_name}"
+headers = {
+    "Authorization": f"Bearer {access_token}"
+}
+site_response = requests.get(site_search_url, headers=headers)
+site_response.raise_for_status()
+site_id = site_response.json()["value"][0]["id"]
+print(f"✅ Site ID nalezeno: {site_id}")
+
+# ======= NALEZENÍ DRIVE ID =======
+drive_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives"
+drive_response = requests.get(drive_url, headers=headers)
+drive_response.raise_for_status()
+drives = drive_response.json()["value"]
+
+drive_id = None
+for drive in drives:
+    if drive["name"] == sharepoint_doc_library:
+        drive_id = drive["id"]
+        break
+
+if not drive_id:
+    raise Exception("❌ Nebyla nalezena dokumentová knihovna.")
+
+print(f"✅ Drive ID: {drive_id}")
+
+# ======= VÝPIS OBSAHU ROOT SLOŽKY =======
+items_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root/children"
+items_response = requests.get(items_url, headers=headers)
+items_response.raise_for_status()
+items = items_response.json()["value"]
+
+print("📂 Seznam složek a souborů v root:")
+for item in items:
+    if item["folder"] if "folder" in item else False:
+        print(f"📁 {item['name']} (složka)")
+    else:
+        print(f"📄 {item['name']} (soubor)")
